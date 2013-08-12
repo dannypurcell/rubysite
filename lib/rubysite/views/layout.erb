@@ -1,0 +1,27 @@
+<html>
+<head>
+  <title><%= layout[:name] %></title>
+  <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1"/>
+  <link rel="stylesheet" type="text/css" media="screen" href="/css/<%= layout[:name] %>.css"/>
+</head>
+<body>
+<div class='content_header'>
+  <h1><%= layout[:name] %></h1>
+  <%= (layout[:back_link].nil?) ? "" : "<a href='#{layout[:back_link]}'>#{layout[:back_link]}</a><br/>" %>
+  <h4><%= layout[:doc] %></h4>
+</div>
+<div class='navigation_panel'>
+  <ul>
+    <%= layout[:nav_entries].map{|entry|
+        "<li><a href='#{entry[:link]}' title='#{entry[:doc]}'>#{entry[:link_name]}</a></li>"
+       }.join("\n") %>
+  </ul>
+</div>
+<div class='content_body'>
+  <%= yield %>
+</div>
+<div class='content_footer'>
+  Powered by <a href='http://github.com/dannypurcell/rubysite'>Rubysite</a>!
+</div>
+</body>
+</html>

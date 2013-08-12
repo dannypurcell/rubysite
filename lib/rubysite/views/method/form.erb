@@ -1,0 +1,7 @@
+<form name="<% form[:name] %>" action="<% form[:action] %>" method="<% form[:method] || "get" %>">
+  <% form[:fields].each do |field| %>
+    <% field[:text] %><input type='<% field[:type] %>' name='<% field[:name] %>'>
+  <% end %>
+  Username: <input type="text" name="user">
+  <input type="submit" value="Submit">
+</form>

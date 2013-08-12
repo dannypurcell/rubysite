@@ -1,6 +1,8 @@
 require 'rubycom'
 require 'sinatra'
 require "sinatra/reloader" if development?
+require 'json'
+require 'yaml'
 
 # Provides a web interface for including modules
 module Rubysite
@@ -28,6 +30,10 @@ module Rubysite
       Sinatra::Base::set :port, '8080'
       Sinatra::Base::set :port, args[1] if !args[0].nil? && args[0] == '--port'
       Sinatra::Base::set :port, args[0].split('=').last if !args[0].nil? && args[0].include?('--port=')
+      Sinatra::Base::set :root, Proc.new { File.join(File.expand_path(File.dirname(__FILE__)), 'rubysite') }
+      Sinatra::Base::set :public_folder, Proc.new { File.join(File.expand_path(File.dirname(__FILE__)), 'rubysite', 'public') }
+      Sinatra::Base::set :views, Proc.new { File.join(File.expand_path(File.dirname(__FILE__)), 'rubysite', 'views') }
+      Sinatra::Base::set :css_files, {default: File.join(File.expand_path(File.dirname(__FILE__)), 'rubysite', 'public', 'css', 'default.css')}
 
       Rubysite.define_routes(base)
 
@@ -40,87 +46,91 @@ module Rubysite
   # Recursively defines routes for the web service according to the commands included in the given base Module.
   # Starts at '/'. Additionally defines any default routes required by the web service.
   #
-  # @param [Module] the Module for which a web interface should be generated
+  # @param [Module] base the Module for which a web interface should be generated
   # @return [Array] a String array listing the routes which were defined for the given base Module
   def self.define_routes(base)
     base = Kernel.const_get(base.to_sym) if base.class == String
-    site_map = Rubysite.define_module_route(base)
-    Sinatra::Base::get "/" do
-      <<-eos.gsub(/^ {6}/,'')
-      <html>
-        <body>
-          <h1>#{base.to_s}</h1>
-          <br />
-          <ul>
-            <li><a href='/#{base.to_s}'>#{base.to_s}</a></li>
-            <li><a href='/help'>help</a></li>
-          </ul>
-        </body>
-      </html>
-      eos
+    site_map = ['/', '/css', '/help'] + Rubysite.define_module_route(base)
+
+    Sinatra::Base::get "/?" do
+      layout = {
+          name: "#{base}",
+          doc: "A Rubysite generated service",
+          nav_entries: [
+              {link: '/', link_name: 'Home', doc: 'Home'},
+              {link: "/#{base}", link_name: "#{base}", doc: Rubycom::Documentation.get_module_doc(base)},
+              {link: "/help", link_name: "Help", doc: 'Interface documentation'}
+          ]
+      }
+      erb(:index, locals: {layout: layout})
     end
+
+    Sinatra::Base::get "/css/:css_name?" do |css_name|
+      css_sym = css_name.to_sym rescue :default
+      css_file = settings.css_files[css_sym] || settings.css_files[:default]
+      File.read(css_file)
+    end
+
     Sinatra::Base::get "/help" do
-      <<-eos.gsub(/^ {6}/,'')
-      <html>
-        <body>
-          <h1>#{base.to_s} Help</h1>
-          <br />
-          <h3>Site Map</h3>
-          <ul>
-            #{site_map.map{|route|
-                "<li><a href='#{route}'>#{route}</a></li>"
-              }.join("\n")
-            }
-          </ul>
-        </body>
-      </html>
-      eos
+      layout = {
+          name: "Help",
+          back_link: "/",
+          doc: "Help page",
+          nav_entries: [
+              {link: '/', link_name: 'Home', doc: 'Home'},
+              {link: "/#{base}", link_name: "#{base}", doc: Rubycom::Documentation.get_module_doc(base)},
+              {link: "/help", link_name: "Help", doc: 'Interface documentation'}
+          ]
+      }
+      help = {
+          site_map: site_map.flatten
+      }
+      erb(:help, locals: {layout: layout, help: help})
     end
-    site_map
+
+    site_map.flatten
   end
 
   # Recursively defines routes for the web service according to the commands included in the given base Module.
   # Starts at the given route_prefix.
   #
-  # @param [Module] the Module for which a web interface should be generated
-  # @param [String] a route pattern to prefix on routes which will be generated in response to this call
+  # @param [Module] base the Module for which a web interface should be generated
+  # @param [String] route_prefix a route pattern to prefix on routes which will be generated in response to this call
   # @return [Array] a String array listing the routes which were defined for the given base Module
   def self.define_module_route(base, route_prefix='/')
     base = Kernel.const_get(base.to_sym) if base.class == String
     defined_routes = ["#{route_prefix.chomp('/')}/#{base.to_s}"]
 
-    commands = Rubycom::Commands.get_top_level_commands(base).select{|sym| sym != :Rubysite} || []
+    commands = Rubycom::Commands.get_top_level_commands(base).select { |sym| sym != :Rubysite } || []
 
-    commands = commands.map{|command_sym|
+    commands = commands.map { |command_sym|
       if base.included_modules.map { |mod| mod.name.to_sym }.include?(command_sym)
-        defined_routes << Rubysite.define_module_route(base.included_modules.select{|mod| mod.name == command_sym.to_s }.first, defined_routes[0])
+        defined_routes << Rubysite.define_module_route(base.included_modules.select { |mod| mod.name == command_sym.to_s }.first, defined_routes[0])
       else
         defined_routes << Rubysite.define_method_route(base, command_sym, defined_routes[0])
       end
       {
-          command_sym => " " << Rubycom::Documentation.get_command_summary(base, command_sym, Rubycom::Documentation.get_separator(command_sym, Rubycom::Commands.get_longest_command_name(base).length)).gsub(command_sym.to_s,'')
+          link: "#{defined_routes[0]}/#{command_sym.to_s}",
+          link_name: "#{command_sym.to_s}",
+          doc: Rubycom::Documentation.get_command_summary(base, command_sym, Rubycom::Documentation.get_separator(command_sym, Rubycom::Commands.get_longest_command_name(base).length)).gsub(command_sym.to_s, '')
       }
-    }.reduce(&:merge) || {}
+    } || []
 
-    Sinatra::Base::get defined_routes[0] do
-      <<-eos.gsub(/^ {6}/,'')
-      <html>
-        <body>
-          <h1>#{base.to_s}</h1>
-          <a href='#{route_prefix}'>back</a>
-          <br />
-          <h4>#{Rubycom::Documentation.get_module_doc(base.to_s)}</h4>
-          <br />
-          <h3>Commands:</h3>
-          <br />
-          <ul>
-            #{commands.map{|command_sym, doc| "<li><a href='#{defined_routes[0]}/#{command_sym}'>#{command_sym}</a>#{doc}</li>"}.join("\n")}
-          </ul>
-          <br />
-        </body>
-      </html>
-      eos
+    Sinatra::Base::get "#{defined_routes[0]}/?" do
+      layout = {
+          name: "#{base}",
+          back_link: route_prefix,
+          doc: Rubycom::Documentation.get_module_doc(base.to_s),
+          nav_entries: [
+              {link: route_prefix, link_name: route_prefix.split('/').last || 'Home', doc: 'Back'},
+          ] + commands + [ {link: "/help", link_name: "Help", doc: 'Interface documentation'} ]
+      }
+      command_list = {
+          command_list: commands
+      }
+      erb(:"module/command_list", locals: {layout: layout, command_list: command_list})
     end
+
     defined_routes.flatten
   end
 
@@ -133,11 +143,61 @@ module Rubysite
   def self.define_method_route(base, command, route_prefix='/')
     base = Kernel.const_get(base.to_sym) if base.class == String
     defined_route = "#{route_prefix}/#{command.to_s}"
-    Sinatra::Base::get defined_route do
-      {
-          docs: Rubycom::Documentation.get_doc(base.public_method(command)),
-          params: Rubycom::Arguments.get_param_definitions(base.public_method(command))
-      }
+    docs = Rubycom::Documentation.get_doc(base.public_method(command))
+    param_defs = Rubycom::Arguments.get_param_definitions(base.public_method(command))
+    route_params = param_defs.map { |key, val_hsh| (val_hsh[:type] == :opt) ? {":#{key}?" => val_hsh[:default]} : {":#{key}" => val_hsh[:default]} }.reduce(&:merge) || {}
+    Sinatra::Base::get "#{defined_route}/?" do
+      begin
+        rubysite_out = ''
+        def rubysite_out.write(data)
+          self << data
+        end
+        rubysite_err = ''
+        def rubysite_err.write(data)
+          self << data
+        end
+        o_stdout, $stdout = $stdout, rubysite_out
+        o_stderr, $stderr = $stderr, rubysite_err
+
+        puts Rubycom.call_method(base, command, params.map { |key, val| "--#{key}=#{val}" })
+
+        layout = {
+            name: "#{base}",
+            back_link: route_prefix,
+            nav_entries: [
+                {link: route_prefix, link_name: route_prefix.split('/').last || 'Home', doc: 'Parent Module'},
+                {link: "/help", link_name: "Help", doc: 'Interface documentation'}
+            ]
+        }
+        result = {
+            params: params,
+            query: request.query_string,
+            param_defs: param_defs,
+            inputs: route_params.merge(params),
+            docs: docs,
+            output: rubysite_out,
+            error: rubysite_err
+        }
+        erb(:"method/result", locals: {layout: layout, result: result})
+
+      rescue Exception => e
+        layout = {
+            name: "#{base}",
+            back_link: route_prefix,
+            nav_entries: [
+                {link: route_prefix, link_name: route_prefix.split('/').last || 'Home', doc: 'Parent Module'},
+                {link: "/help", link_name: "Help", doc: 'Interface documentation'}
+            ]
+        }
+        error = {
+            base: base,
+            message: e.message
+        }
+        erb(:"method/error", locals: {layout: layout, error: error})
+      ensure
+        $stdout = o_stdout
+        $stderr = o_stderr
+      end
     end
     defined_route
   end

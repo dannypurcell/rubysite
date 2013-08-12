@@ -18,5 +18,5 @@ Write your module of methods, document them as you normally would.
 `include Rubysite`
 Optionally `#!/usr/bin/env ruby` at the top.
 
-Calling `ruby ./path/to/module.rb server [port]` will start the server.
+Calling `ruby ./path/to/module.rb` will start the server.
 Your module's singleton methods `def self.method_name` will be available from the web at `localhost:8080` by default.

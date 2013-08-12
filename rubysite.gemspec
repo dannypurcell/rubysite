@@ -10,7 +10,7 @@ Gem::Specification.new do |spec|
   spec.email         = ["d.purcell.jr+rubysite@gmail.com"]
   spec.description   = %q{Allows web access for all singleton methods in an including module. Allows the user to make a web service by simply including Rubysite.}
   spec.summary       = %q{Converts singleton methods to web service routes upon inclusion.}
-  spec.homepage      = "http://dannypurcell.github.io/rubysite"
+  spec.homepage      = "http://github.com/dannypurcell/Rubysite"
   spec.license       = "MIT"
 
   spec.files         = `git ls-files`.split($/)

@@ -1,0 +1,6 @@
+<h3>Site Map</h3>
+<ul>
+  <%= help[:site_map].map{|route|
+    "<li><a href='#{route}'>#{route}</a></li>"
+    }.join("\n")%>
+</ul>
