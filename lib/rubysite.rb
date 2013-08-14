@@ -126,7 +126,7 @@ module Rubysite
           doc: Rubycom::Documentation.get_module_doc(base.to_s),
           nav_entries: [
               {link: route_prefix, link_name: route_prefix.split('/').last || 'Home', doc: 'Back'},
-          ] + commands + [ {link: "/help", link_name: "Help", doc: 'Interface documentation'} ]
+          ] + commands + [{link: "/help", link_name: "Help", doc: 'Interface documentation'}]
       }
       command_list = {
           command_list: commands
@@ -148,22 +148,11 @@ module Rubysite
     defined_route = "#{route_prefix}/#{command.to_s}"
     docs = Rubycom::Documentation.get_doc(base.public_method(command))
     param_defs = Rubycom::Arguments.get_param_definitions(base.public_method(command))
-    route_params = param_defs.map { |key, val_hsh| (val_hsh[:type] == :opt) ? {":#{key}?" => val_hsh[:default]} : {":#{key}" => val_hsh[:default]} }.reduce(&:merge) || {}
+
     Sinatra::Base::get "#{defined_route}/?" do
-      begin
-        rubysite_out = ''
-        def rubysite_out.write(data)
-          self << data
-        end
-        rubysite_err = ''
-        def rubysite_err.write(data)
-          self << data
-        end
-        o_stdout, $stdout = $stdout, rubysite_out
-        o_stderr, $stderr = $stderr, rubysite_err
+      method_call_params = params.map { |key, val| (param_defs.keys.include?(key.to_sym) && param_defs[key.to_sym][:type] == :req) ? "#{val}" : "--#{key}=#{val}" }
 
-        puts Rubycom.call_method(base, command, params.map { |key, val| "--#{key}=#{val}" })
-
+      if params.nil? || params.empty?
         layout = {
             name: "#{base}",
             back_link: route_prefix,
@@ -172,37 +161,87 @@ module Rubysite
                 {link: "/help", link_name: "Help", doc: 'Interface documentation'}
             ]
         }
-        result = {
-            params: params,
-            query: request.query_string,
-            param_defs: param_defs,
-            inputs: route_params.merge(params),
-            docs: docs,
-            output: rubysite_out,
-            error: rubysite_err
-        }
-        erb(:"method/result", locals: {layout: layout, result: result})
-
-      rescue Exception => e
-        layout = {
-            name: "#{base}",
-            back_link: route_prefix,
-            nav_entries: [
-                {link: route_prefix, link_name: route_prefix.split('/').last || 'Home', doc: 'Parent Module'},
-                {link: "/help", link_name: "Help", doc: 'Interface documentation'}
-            ]
-        }
-        error = {
+        form = {
             base: base,
-            message: e.message
+            params: params,
+            param_defs: param_defs,
+            method_call_params: method_call_params,
+            docs: docs,
+            name: "#{defined_route}_form",
+            action: "#{defined_route}",
+            method: 'get',
+            fields: param_defs.map{|key, val_hsh|
+              {
+                  label: key.to_s.split('_').map{|word| word.capitalize }.join(' ')+':',
+                  type: (docs[:param].nil?)? 'text' : docs[:param].map{|str| {type: str.match(/\[\w+\]/), name: str.gsub(/\[\w+\]/, '').split(' ').first }}.reduce(&:merge),
+                  name: "#{key.to_s}",
+                  value: (val_hsh[:default] == :nil_rubycom_required_param)? '' : val_hsh[:default]
+              }
+            }
         }
-        erb(:"method/error", locals: {layout: layout, error: error})
-      ensure
-        $stdout = o_stdout
-        $stderr = o_stderr
+        erb(:"method/form", locals: {layout: layout, form: form})
+      else
+        begin
+          rubysite_out = ''
+
+          def rubysite_out.write(data)
+            self << data
+          end
+
+          rubysite_err = ''
+
+          def rubysite_err.write(data)
+            self << data
+          end
+
+          o_stdout, $stdout = $stdout, rubysite_out
+          o_stderr, $stderr = $stderr, rubysite_err
+
+          puts Rubycom.call_method(base, command, method_call_params)
+
+          layout = {
+              name: "#{base}",
+              back_link: route_prefix,
+              nav_entries: [
+                  {link: route_prefix, link_name: route_prefix.split('/').last || 'Home', doc: 'Parent Module'},
+                  {link: "/help", link_name: "Help", doc: 'Interface documentation'}
+              ]
+          }
+          result = {
+              base: base,
+              params: params,
+              param_defs: param_defs,
+              method_call_params: method_call_params,
+              docs: docs,
+              output: rubysite_out,
+              error: rubysite_err
+          }
+          erb(:"method/result", locals: {layout: layout, result: result})
+
+        rescue Exception => e
+          layout = {
+              name: "#{base}",
+              back_link: route_prefix,
+              nav_entries: [
+                  {link: route_prefix, link_name: route_prefix.split('/').last || 'Home', doc: 'Parent Module'},
+                  {link: "/help", link_name: "Help", doc: 'Interface documentation'}
+              ]
+          }
+          error = {
+              base: base,
+              params: params,
+              param_defs: param_defs,
+              method_call_params: method_call_params,
+              message: e.message,
+              stack_trace: e.backtrace
+          }
+          erb(:"method/error", locals: {layout: layout, error: error})
+        ensure
+          $stdout = o_stdout
+          $stderr = o_stderr
+        end
       end
     end
     defined_route
   end
-
 end

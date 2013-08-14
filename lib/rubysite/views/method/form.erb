@@ -1,7 +1,14 @@
-<form name="<% form[:name] %>" action="<% form[:action] %>" method="<% form[:method] || "get" %>">
-  <% form[:fields].each do |field| %>
-    <% field[:text] %><input type='<% field[:type] %>' name='<% field[:name] %>'>
-  <% end %>
-  Username: <input type="text" name="user">
+<p>
+  layout = <%= layout.inspect %>
+</p>
+<p>
+  form = <%= form.inspect %>
+</p>
+<form name="<%= form[:name] %>" action="<%= form[:action] %>" method="<%= form[:method] || "post" %>">
+  <%= form[:fields].map{|field|
+        "#{field[:label]} <input type='#{field[:type]}' name='#{field[:name]}' #{(field[:value].nil?)? '': "value='#{field[:value]}'"} \\/>"
+    }.join("<br />")
+  %>
+  <br />
   <input type="submit" value="Submit">
 </form>
