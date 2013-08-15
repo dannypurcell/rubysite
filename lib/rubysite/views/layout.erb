@@ -7,7 +7,7 @@
 <body>
 <div class='content_header'>
   <h1><%= layout[:name] %></h1>
-  <%= (layout[:back_link].nil?) ? "" : "<a href='#{layout[:back_link]}'>#{layout[:back_link]}</a><br/>" %>
+  <%= (layout[:bread_crumbs].nil?) ? "" : "#{layout[:bread_crumbs].map{|crumb| "<a href='#{crumb}'>#{crumb.split('/').last}</a>"}.join("/")}<br/>" %>
   <h4><%= layout[:doc] %></h4>
 </div>
 <div class='navigation_panel'>

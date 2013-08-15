@@ -103,7 +103,7 @@ module Rubysite
   def self.define_module_route(base, route_prefix='/')
     base = Kernel.const_get(base.to_sym) if base.class == String
     defined_routes = ["#{route_prefix.chomp('/')}/#{base.to_s}"]
-
+    route_parts = defined_routes[0].split('/')
     commands = Rubycom::Commands.get_top_level_commands(base).select { |sym| sym != :Rubysite } || []
 
     commands = commands.map { |command_sym|
@@ -123,6 +123,7 @@ module Rubysite
       layout = {
           name: "#{base}",
           back_link: route_prefix,
+          bread_crumbs: route_parts.each_with_index.map{|_,index| route_parts[0..index].join('/')}.select{|p|!p.empty?},
           doc: Rubycom::Documentation.get_module_doc(base.to_s),
           nav_entries: [
               {link: route_prefix, link_name: route_prefix.split('/').last || 'Home', doc: 'Back'},
@@ -146,6 +147,7 @@ module Rubysite
   def self.define_method_route(base, command, route_prefix='/')
     base = Kernel.const_get(base.to_sym) if base.class == String
     defined_route = "#{route_prefix}/#{command.to_s}"
+    route_parts = defined_route.split('/')
     docs = Rubycom::Documentation.get_doc(base.public_method(command))
     param_defs = Rubycom::Arguments.get_param_definitions(base.public_method(command))
 
@@ -156,6 +158,7 @@ module Rubysite
         layout = {
             name: "#{base}",
             back_link: route_prefix,
+            bread_crumbs: route_parts.each_with_index.map{|_,index| route_parts[0..index].join('/')}.select{|p|!p.empty?},
             nav_entries: [
                 {link: route_prefix, link_name: route_prefix.split('/').last || 'Home', doc: 'Parent Module'},
                 {link: "/help", link_name: "Help", doc: 'Interface documentation'}
@@ -222,6 +225,7 @@ module Rubysite
           layout = {
               name: "#{base}",
               back_link: route_prefix,
+              bread_crumbs: route_parts.each_with_index.map{|_,index| route_parts[0..index].join('/')}.select{|p|!p.empty?},
               nav_entries: [
                   {link: route_prefix, link_name: route_prefix.split('/').last || 'Home', doc: 'Parent Module'},
                   {link: "/help", link_name: "Help", doc: 'Interface documentation'}
