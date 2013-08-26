@@ -1,6 +1,6 @@
-<h3>Site Map</h3>
-<ul>
-  <%= help[:site_map].map{|route|
+<h4>Site Map</h4>
+<ul style="list-style-type: none;">
+  <%= site_map.map{|route|
     "<li><a href='#{route}'>#{route}</a></li>"
-    }.join("\n")%>
+    }.join("\n") %>
 </ul>

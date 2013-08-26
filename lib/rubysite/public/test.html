@@ -4,10 +4,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link href="/twbs/css/bootstrap.css" rel="stylesheet">
   <style>
-      body {
-          position: relative;
-          padding-top: 40px;
-      }
+    body {
+      position: relative;
+      padding-top: 40px;
+    }
   </style>
   <script src="/jquery/jquery-2.0.3.js"></script>
   <script src="/twbs/js/bootstrap.js"></script>
@@ -21,23 +21,29 @@
 <div class="navbar navbar-inverse navbar-fixed-top">
   <div class="navbar-inner">
     <div class="container-fluid">
-      <a class="brand" href="/"><%= settings.app_name %></a>
-      <ul class="nav">
-        <%= layout[:nav_bar_links].map{|link_item| "<li><a href='#{link_item[:link]}' title='#{link_item[:doc]}'>#{link_item[:name]}</a></li>" }.join("\n") %>
-      </ul>
+      <button type="button" class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="brand" href="#">Project name</a>
+      <div class="nav-collapse collapse">
+        <ul class="nav">
+          <li class="active"><a href="#">Home</a></li>
+          <li><a href="#about">About</a></li>
+          <li><a href="#contact">Contact</a></li>
+        </ul>
+      </div>
     </div>
   </div>
 </div><!--/navbar-top -->
 
 <div class="sidebar-nav sidebar-nav-fixed inverse">
   <ul class="nav">
-    <%= layout[:side_bar_links].map{|link_item|
-      if link_item[:header_name].nil?
-        "<li><a href='#{link_item[:link]}' title='#{link_item[:doc]}'>#{link_item[:name]}</a></li>"
-      else
-        "<li><span class='sidebar-nav-header'>#{link_item[:header_name]}</span></li>"
-      end
-    }.join("\n") %>
+    <li><span class="sidebar-nav-header">Sidebar</span></li>
+    <li><a href="#">Link</a></li>
+    <li><a href="#">Link</a></li>
+    <li><a href="#">Link</a></li>
   </ul>
 </div><!--/sidebar -->
 
@@ -45,17 +51,11 @@
   <div class="row-fluid">
     <div class="span12">
       <ul class="breadcrumb">
-        <%= layout[:breadcrumbs].map{|crumb|
-          if crumb[:active]
-            "<li class='active'>#{crumb[:name]}</li>"
-          else
-            "<li><a href='#{crumb[:link]}'>#{crumb[:name]}</a> <span class='divider'>/</span></li>"
-          end
-        }.join("\n") %>
+        <li><a href="#">Home</a> <span class="divider">/</span></li>
+        <li><a href="#">Library</a> <span class="divider">/</span></li>
+        <li class="active">Data</li>
       </ul>
-      <div class="content">
-        <%= yield %>
-      </div>
+      <p>Content</p>
     </div>
   </div>
 </div><!--/container-area -->
