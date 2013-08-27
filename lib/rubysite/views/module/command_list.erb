@@ -1,9 +1,10 @@
+<p><%= mod[:doc] %></p>
 <h3>Commands:</h3>
 <br/>
 <ul>
   <ul>
-    <%= command_list[:command_list].map{|entry|
-      "<li><a href='#{entry[:link]}'>#{entry[:link_name]}</a>#{entry[:doc]}</li>"
+    <%= mod[:command_list].map{|entry|
+      "<li><a href='#{entry[:link]}'>#{entry[:name]}</a> - #{entry[:doc]}</li>"
     }.join("\n") %>
   </ul>
 </ul>

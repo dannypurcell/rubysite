@@ -49,12 +49,20 @@ module Rubysite
     end
   end
 
-  def self.get_layout_vars(nav_bar_links=[], side_bar_links=[], breadcrumbs=[])
+  def self.get_layout_vars(nav_bar_links=[], side_bar_links=[], route_string='')
     {
         nav_bar_links: (nav_bar_links.nil?) ? [] : nav_bar_links.compact,
         side_bar_links: (side_bar_links.nil?) ? [] : side_bar_links.compact,
-        breadcrumbs: (breadcrumbs.nil?) ? [] : breadcrumbs.compact,
+        breadcrumbs: Rubysite.get_breadcrumbs(route_string),
     }
+  end
+
+  def self.get_breadcrumbs(route_string)
+    return {} if route_string.nil? || route_string.empty?
+    route_parts = route_string.split('/')
+    route_string.split('/').each_with_index.map { |_, index|
+      {link: route_parts[0..index].join('/'), name: route_parts[index]}
+    }.select { |p| !p[:link].nil? && !p[:link].empty? }
   end
 
   # Recursively defines routes for the web service according to the commands included in the given base Module.
@@ -68,11 +76,11 @@ module Rubysite
         {link: "/server", name: "Server Info", doc: "Information about the server this console is running on."},
         {link: "/help", name: "Help", doc: "Interface documentation"}
     ]
-    defined_routes = (Rubysite.define_module_route(base).compact + default_routes.map { |item| item[:link] })||[]
+    defined_routes = (Rubysite.define_module_route(base) + default_routes)||[]
 
     Sinatra::Base::get "/?" do
 
-      erb(:index, locals: {layout: Rubysite.get_layout_vars(default_routes)})
+      erb(:index, locals: {layout: Rubysite.get_layout_vars(default_routes, defined_routes)})
     end
 
     Sinatra::Base::get "/server" do
@@ -97,36 +105,33 @@ module Rubysite
   # @return [Array] a String array listing the routes which were defined for the given base Module
   def self.define_module_route(base, route_prefix='/')
     base = Kernel.const_get(base.to_sym) if base.class == String
-    #TODO update these to {:link,:name,:doc}
-    defined_routes = ["#{route_prefix.chomp('/')}/#{base.to_s}"]
-    route_parts = defined_routes[0].split('/')
-    commands = Rubycom::Commands.get_top_level_commands(base).select { |sym| sym != :Rubysite } || []
+    route_string = "#{route_prefix.chomp('/')}/#{base.to_s}"
 
-    commands = commands.map { |command_sym|
+    defined_routes = []
+    commands = Rubycom::Commands.get_top_level_commands(base).select { |sym| sym != :Rubysite }.map { |command_sym|
       if base.included_modules.map { |mod| mod.name.to_sym }.include?(command_sym)
-        defined_routes << Rubysite.define_module_route(base.included_modules.select { |mod| mod.name == command_sym.to_s }.first, defined_routes[0])
+        defined_routes << Rubysite.define_module_route(base.included_modules.select { |mod| mod.name == command_sym.to_s }.first, route_string)
       else
-        defined_routes << Rubysite.define_method_route(base, command_sym, defined_routes[0])
+        defined_routes << Rubysite.define_method_route(base, command_sym, route_string)
       end
-      {
-          link: "#{defined_routes[0]}/#{command_sym.to_s}",
-          link_name: "#{command_sym.to_s}",
-          doc: Rubycom::Documentation.get_command_summary(base, command_sym, Rubycom::Documentation.get_separator(command_sym, Rubycom::Commands.get_longest_command_name(base).length)).gsub(command_sym.to_s, '')
+      command_link = {
+          link: "#{route_string}/#{command_sym.to_s}",
+          name: "#{command_sym.to_s}",
+          doc: Rubycom::Documentation.get_command_summary(base, command_sym, ' ').gsub(command_sym.to_s, '').strip,
+          # TODO properly detect which are commands and which are modules
+          type: :command
       }
+      defined_routes << command_link
+      command_link
     } || []
 
-    Sinatra::Base::get "#{defined_routes[0]}/?" do
-      command_list = {
-          name: "#{base}",
-          back_link: route_prefix,
+    Sinatra::Base::get "#{route_string}/?" do
+      mod = {
           doc: Rubycom::Documentation.get_module_doc(base.to_s),
-          bread_crumbs: route_parts.each_with_index.map { |_, index| route_parts[0..index].join('/') }.select { |p| !p.empty? },
-          nav_entries: [
-              {link: route_prefix, link_name: route_prefix.split('/').last || 'Home', doc: 'Back'},
-          ] + commands + [{link: "/help", link_name: "Help", doc: 'Interface documentation'}],
           command_list: commands
       }
-      erb(:"module/command_list", locals: {command_list: command_list})
+      module_links = defined_routes.flatten.select{|item| item[:type] == :module }
+      erb(:"module/command_list", locals: {layout: Rubysite.get_layout_vars([], module_links, route_string), mod: mod})
     end
 
     defined_routes.flatten
@@ -140,33 +145,25 @@ module Rubysite
   # @return [Array] a String array listing the routes which were defined for the given base Module
   def self.define_method_route(base, command, route_prefix='/')
     base = Kernel.const_get(base.to_sym) if base.class == String
-    defined_route = "#{route_prefix}/#{command.to_s}"
-    route_parts = defined_route.split('/')
-    docs = Rubycom::Documentation.get_doc(base.public_method(command))
+    route_string = "#{route_prefix}/#{command.to_s}"
+    docs = Rubycom::Documentation.get_doc(base.public_method(command)) || {}
     param_defs = Rubycom::Arguments.get_param_definitions(base.public_method(command))
+    sidebar_links = [
+        {link: route_prefix, name: 'Back', doc: ''}
+    ]
 
-    Sinatra::Base::get "#{defined_route}/?" do
+    Sinatra::Base::get "#{route_string}/?" do
       method_call_params = params.map { |key, val| (param_defs.keys.include?(key.to_sym) && param_defs[key.to_sym][:type] == :req) ? "#{val}" : "--#{key}=#{val}" }
 
       if params.nil? || params.empty?
-        layout = {
-            app_name: settings.app_name,
-            name: "#{base}",
-            back_link: route_prefix,
-            bread_crumbs: route_parts.each_with_index.map { |_, index| route_parts[0..index].join('/') }.select { |p| !p.empty? },
-            nav_entries: [
-                {link: route_prefix, link_name: route_prefix.split('/').last || 'Home', doc: 'Parent Module'},
-                {link: "/help", link_name: "Help", doc: 'Interface documentation'}
-            ]
-        }
         form = {
             base: base,
             params: params,
             param_defs: param_defs,
             method_call_params: method_call_params,
             docs: docs,
-            name: "#{defined_route}_form",
-            action: "#{defined_route}",
+            name: "#{route_string}_form",
+            action: "#{route_string}",
             method: 'get',
             fields: param_defs.map { |key, val_hsh|
               {
@@ -177,7 +174,7 @@ module Rubysite
               }
             }
         }
-        erb(:"method/form", locals: {layout: layout, form: form})
+        erb(:"method/form", locals: {layout:  Rubysite.get_layout_vars([], sidebar_links, route_string), form: form})
       else
         begin
           rubysite_out = ''
@@ -197,15 +194,6 @@ module Rubysite
 
           puts Rubycom.call_method(base, command, method_call_params)
 
-          layout = {
-              app_name: settings.app_name,
-              name: "#{base}",
-              back_link: route_prefix,
-              nav_entries: [
-                  {link: route_prefix, link_name: route_prefix.split('/').last || 'Home', doc: 'Parent Module'},
-                  {link: "/help", link_name: "Help", doc: 'Interface documentation'}
-              ]
-          }
           result = {
               base: base,
               params: params,
@@ -215,19 +203,9 @@ module Rubysite
               output: rubysite_out,
               error: rubysite_err
           }
-          erb(:"method/result", locals: {layout: layout, result: result})
+          erb(:"method/result", locals: {layout: Rubysite.get_layout_vars([], sidebar_links, route_string), result: result})
 
         rescue Exception => e
-          layout = {
-              app_name: settings.app_name,
-              name: "#{base}",
-              back_link: route_prefix,
-              bread_crumbs: route_parts.each_with_index.map { |_, index| route_parts[0..index].join('/') }.select { |p| !p.empty? },
-              nav_entries: [
-                  {link: route_prefix, link_name: route_prefix.split('/').last || 'Home', doc: 'Parent Module'},
-                  {link: "/help", link_name: "Help", doc: 'Interface documentation'}
-              ]
-          }
           error = {
               base: base,
               params: params,
@@ -236,13 +214,18 @@ module Rubysite
               message: e.message,
               stack_trace: e.backtrace
           }
-          erb(:"method/error", locals: {layout: layout, error: error})
+          erb(:"method/error", locals: {layout:  Rubysite.get_layout_vars([], sidebar_links, route_string), error: error})
         ensure
           $stdout = o_stdout
           $stderr = o_stderr
         end
       end
     end
-    defined_route
+    {
+        link: route_string,
+        name: command.to_s,
+        doc: (docs[:desc] || []).join("\n"),
+        type: :command
+    }
   end
 end
