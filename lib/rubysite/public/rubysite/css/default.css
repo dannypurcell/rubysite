@@ -1,18 +1,32 @@
+html, body {height: 94.5%;}
+
 .sidebar-nav-fixed {
-    position:fixed;
-    top:40px;
-    width:15%;
-    height: 90%;
+    position: fixed;
+    top: 40px;
+    width: 15%;
+    height: 100%;
+    text-wrap: normal;
+    overflow-wrap: break-word;
     text-align: center;
 }
 
-.sidebar-nav-header{
+.sidebar-nav-header {
     font-weight: bold;
     font-size: 110%;
 }
 
-.content-area{
-    margin-left: 15%
+.wrapper{
+    min-height: 100%;
+}
+
+.content-area {
+    overflow:auto;
+    margin-left: 15%;
+}
+
+.footer {
+    position: relative;
+    clear:both;
 }
 
 .inverse {
@@ -21,11 +35,11 @@
     border-color: #252525;
 }
 
-.inverse > ul > li > a{
+.inverse > ul > li > a {
     color: #cccccc;
 }
 
-.inverse > ul > li > a:hover{
+.inverse > ul > li > a:hover {
     color: #ffffff;
     background-color: #1b1b1b;
     border-color: #252525;

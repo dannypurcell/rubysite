@@ -106,35 +106,37 @@ module Rubysite
   def self.define_module_route(base, route_prefix='/')
     base = Kernel.const_get(base.to_sym) if base.class == String
     route_string = "#{route_prefix.chomp('/')}/#{base.to_s}"
+    module_link = {
+        link: route_string,
+        name: base.to_s,
+        doc: Rubycom::Documentation.get_module_doc(base.to_s).strip,
+        type: :module
+    }
 
-    defined_routes = []
-    commands = Rubycom::Commands.get_top_level_commands(base).select { |sym| sym != :Rubysite }.map { |command_sym|
+    defined_routes = ([module_link] << (Rubycom::Commands.get_top_level_commands(base).select { |sym| sym != :Rubysite }.map { |command_sym|
       if base.included_modules.map { |mod| mod.name.to_sym }.include?(command_sym)
-        defined_routes << Rubysite.define_module_route(base.included_modules.select { |mod| mod.name == command_sym.to_s }.first, route_string)
+        Rubysite.define_module_route(base.included_modules.select { |mod| mod.name == command_sym.to_s }.first, route_string)
       else
-        defined_routes << Rubysite.define_method_route(base, command_sym, route_string)
+        Rubysite.define_method_route(base, command_sym, route_string)
       end
-      command_link = {
-          link: "#{route_string}/#{command_sym.to_s}",
-          name: "#{command_sym.to_s}",
-          doc: Rubycom::Documentation.get_command_summary(base, command_sym, ' ').gsub(command_sym.to_s, '').strip,
-          # TODO properly detect which are commands and which are modules
-          type: :command
-      }
-      defined_routes << command_link
-      command_link
-    } || []
+    } || [])).flatten
 
     Sinatra::Base::get "#{route_string}/?" do
       mod = {
           doc: Rubycom::Documentation.get_module_doc(base.to_s),
-          command_list: commands
+          command_list: defined_routes.select{|link|
+            link[:link].gsub(route_string,'').split('/').select{|item| !item.empty?}.size == 1
+          }.map{|link|
+            #todo correct separator and sidebar content floating with view
+            link[:doc] = Rubycom::Documentation.get_separator(link[:name].to_s.to_sym, Rubycom::Commands.get_longest_command_name(base).length)+link[:doc]
+            link
+          }
       }
       module_links = defined_routes.flatten.select{|item| item[:type] == :module }
       erb(:"module/command_list", locals: {layout: Rubysite.get_layout_vars([], module_links, route_string), mod: mod})
     end
 
-    defined_routes.flatten
+    defined_routes
   end
 
   # Defines the route for the given command on the given base. The resulting route will be prefixed with the given route_prefix.

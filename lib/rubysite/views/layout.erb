@@ -12,7 +12,6 @@
   <script src="/jquery/jquery-2.0.3.js"></script>
   <script src="/twbs/js/bootstrap.js"></script>
 
-  <!-- Custom links for this app -->
   <link rel="shortcut icon" href="/assets/icons/favicon.png">
   <link href="/rubysite/css/default.css" rel="stylesheet">
 
@@ -29,38 +28,42 @@
   </div>
 </div><!--/navbar-top -->
 
-<div class="sidebar-nav sidebar-nav-fixed inverse">
-  <ul class="nav">
-    <%= layout[:side_bar_links].map{|link_item|
-      if link_item[:header_name].nil?
-        "<li><a href='#{link_item[:link]}' title='#{link_item[:doc]}'>#{link_item[:name]}</a></li>"
-      else
-        "<li><span class='sidebar-nav-header'>#{link_item[:header_name]}</span></li>"
-      end
-    }.join("\n") %>
-  </ul>
-</div><!--/sidebar -->
+<div class="wrapper">
+  <div class="sidebar-nav sidebar-nav-fixed inverse">
+    <ul class="nav">
+      <%= layout[:side_bar_links].map{|link_item|
+        if link_item[:header_name].nil?
+          "<li><a href='#{link_item[:link]}' title='#{link_item[:doc]}'>#{link_item[:name]}</a></li>"
+        else
+          "<li><span class='sidebar-nav-header'>#{link_item[:header_name]}</span></li>"
+        end
+      }.join("\n") %>
+    </ul>
+  </div><!--/sidebar -->
 
-<div class="container-fluid content-area">
-  <div class="row-fluid">
-    <div class="span12">
-      <ul class="breadcrumb">
-        <%= layout[:breadcrumbs].map{|crumb|
-          if crumb[:active]
-            "<li class='active'>#{crumb[:name]}</li>"
-          else
-            "<li><a href='#{crumb[:link]}'>#{crumb[:name]}</a> <span class='divider'>/</span></li>"
-          end
-        }.join("\n") %>
-      </ul>
-      <div class="content">
-        <%= yield %>
+  <div class="container-fluid content-area">
+    <div class="row-fluid">
+      <div class="span12">
+        <% if !layout[:breadcrumbs].nil? && !layout[:breadcrumbs].empty? %>
+            <ul class="breadcrumb">
+              <%= layout[:breadcrumbs].map{|crumb|
+                if crumb[:active]
+                  "<li class='active'>#{crumb[:name]}</li>"
+                else
+                  "<li><a href='#{crumb[:link]}'>#{crumb[:name]}</a> <span class='divider'>/</span></li>"
+                end
+              }.join("\n") %>
+            </ul>
+        <% end %>
+        <div class="content">
+          <%= yield %>
+        </div>
       </div>
     </div>
-  </div>
-</div><!--/container-area -->
+  </div><!--/container-area -->
+</div>
 
-<div class="navbar navbar-inverse navbar-fixed-bottom">
+<div class="navbar navbar-inverse navbar-fixed-bottom footer">
   <div class="navbar-inner">
     <div class="container-fluid">
       <ul class="nav">
