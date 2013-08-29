@@ -79,8 +79,8 @@ module Rubysite
     defined_routes = (Rubysite.define_module_route(base) + default_routes)||[]
 
     Sinatra::Base::get "/?" do
-
-      erb(:index, locals: {layout: Rubysite.get_layout_vars(default_routes, defined_routes)})
+      base_route = defined_routes.select{|link|link[:name]==base.to_s}
+      erb(:index, locals: {layout: Rubysite.get_layout_vars(default_routes, base_route)})
     end
 
     Sinatra::Base::get "/server" do
@@ -113,7 +113,9 @@ module Rubysite
         type: :module
     }
 
-    defined_routes = ([module_link] << (Rubycom::Commands.get_top_level_commands(base).select { |sym| sym != :Rubysite }.map { |command_sym|
+    defined_routes = ([module_link] << (Rubycom::Commands.get_top_level_commands(base).select { |sym|
+      sym != :Rubysite
+    }.map { |command_sym|
       if base.included_modules.map { |mod| mod.name.to_sym }.include?(command_sym)
         Rubysite.define_module_route(base.included_modules.select { |mod| mod.name == command_sym.to_s }.first, route_string)
       else
@@ -123,17 +125,15 @@ module Rubysite
 
     Sinatra::Base::get "#{route_string}/?" do
       mod = {
-          doc: Rubycom::Documentation.get_module_doc(base.to_s),
+          doc: Rubycom::Documentation.get_module_doc(base.to_s.to_sym),
           command_list: defined_routes.select{|link|
             link[:link].gsub(route_string,'').split('/').select{|item| !item.empty?}.size == 1
-          }.map{|link|
-            #todo correct separator and sidebar content floating with view
-            link[:doc] = Rubycom::Documentation.get_separator(link[:name].to_s.to_sym, Rubycom::Commands.get_longest_command_name(base).length)+link[:doc]
-            link
           }
       }
-      module_links = defined_routes.flatten.select{|item| item[:type] == :module }
-      erb(:"module/command_list", locals: {layout: Rubysite.get_layout_vars([], module_links, route_string), mod: mod})
+      sidebar_links = defined_routes.flatten.select{|item|
+        (item[:type] == :module) && (item[:name] != base.to_s)
+      } << {link: route_prefix, name: 'Back', doc: ''}
+      erb(:"module/command_list", locals: {layout: Rubysite.get_layout_vars([], sidebar_links, route_string), mod: mod})
     end
 
     defined_routes
@@ -158,6 +158,7 @@ module Rubysite
       method_call_params = params.map { |key, val| (param_defs.keys.include?(key.to_sym) && param_defs[key.to_sym][:type] == :req) ? "#{val}" : "--#{key}=#{val}" }
 
       if params.nil? || params.empty?
+        #TODO update form template
         form = {
             base: base,
             params: params,
