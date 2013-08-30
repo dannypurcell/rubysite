@@ -1,14 +1,11 @@
-<p>
-  layout = <%= layout.inspect %>
-</p>
-<p>
-  form = <%= form.inspect %>
-</p>
-<form name="<%= form[:name] %>" action="<%= form[:action] %>" method="<%= form[:method] || "post" %>">
-  <%= form[:fields].map{|field|
-        "#{field[:label]} <input type='#{field[:type]}' name='#{field[:name]}' #{(field[:value].nil?)? '': "value='#{field[:value]}'"} \\/>"
-    }.join("<br />")
-  %>
-  <br />
-  <input type="submit" value="Submit">
+<form  id="<%= form[:name] %>" name="<%= form[:name] %>" action="<%= form[:action] %>" method="<%= form[:method] || "post" %>" class='form-horizontal'>
+  <fieldset form="<%= form[:name] %>">
+    <legend><%= form[:command_name] %></legend>
+    <p><%= form[:docs] %></p>
+    <%= Rubysite::Html.generate_fields(form[:fields]) %>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Submit</button>
+      <button type="reset" class="btn">Clear</button>
+    </div>
+  </fieldset>
 </form>

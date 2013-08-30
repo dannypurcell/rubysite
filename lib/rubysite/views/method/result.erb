@@ -1,13 +1,9 @@
 <div class='result_stdout'>
+  <!-- TODO nicer results -->
   <h3>StdOut</h3>
-  <p>
-    <%= result[:output] %>
-  </p>
+  <p style='white-space: pre-wrap;'><%= result[:output] %></p>
 </div>
 <div class='result_stderr'>
   <h3>StdErr</h3>
-  <p>
-    <%= result[:error] %>
-  </p>
+  <p style='white-space: pre-wrap;'><%= result[:error] %></p>
 </div>
-<%= (layout[:back_link].nil?) ? "" : "<a href='#{layout[:back_link]}'>back</a><br/>" %>

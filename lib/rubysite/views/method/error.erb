@@ -1,17 +1,12 @@
 <h1>Error in <%= error[:base] %></h1>
 <br />
 <h3>Error Message:</h3>
-<h4><%= error[:message] %></h4>
-<h4>Param_defs:</h4>
-<p>
-  <%= error[:param_defs] %>
-</p>
+<h4 class="well" style='white-space: pre-wrap;'><%= error[:message] %></h4>
+<br />
+<h3>Stack Trace:</h3>
+<h4 class="well" style='white-space: pre-wrap;'><%= error[:stack_trace] %></h4>
 <h4>Parameters:</h4>
-<p>
-  <%= error[:params] %>
-</p>
+<p class="well" style='white-space: pre-wrap;'><%= params %></p>
 <h4>Method Call Parameters:</h4>
-<p>
-  <%= error[:method_call_params] %>
-</p>
+<p class="well" style='white-space: pre-wrap;'><%= error[:method_call_params] %></p>
 

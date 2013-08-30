@@ -4,6 +4,8 @@ require "sinatra/reloader" if development?
 require 'json'
 require 'yaml'
 
+require "#{File.dirname(__FILE__)}/rubysite/html.rb"
+
 # Provides a web interface for including modules
 module Rubysite
   class SiteError < StandardError;
@@ -79,7 +81,7 @@ module Rubysite
     defined_routes = (Rubysite.define_module_route(base) + default_routes)||[]
 
     Sinatra::Base::get "/?" do
-      base_route = defined_routes.select{|link|link[:name]==base.to_s}
+      base_route = defined_routes.select { |link| link[:name]==base.to_s }
       erb(:index, locals: {layout: Rubysite.get_layout_vars(default_routes, base_route)})
     end
 
@@ -126,11 +128,11 @@ module Rubysite
     Sinatra::Base::get "#{route_string}/?" do
       mod = {
           doc: Rubycom::Documentation.get_module_doc(base.to_s.to_sym),
-          command_list: defined_routes.select{|link|
-            link[:link].gsub(route_string,'').split('/').select{|item| !item.empty?}.size == 1
+          command_list: defined_routes.select { |link|
+            link[:link].gsub(route_string, '').split('/').select { |item| !item.empty? }.size == 1
           }
       }
-      sidebar_links = defined_routes.flatten.select{|item|
+      sidebar_links = defined_routes.flatten.select { |item|
         (item[:type] == :module) && (item[:name] != base.to_s)
       } << {link: route_prefix, name: 'Back', doc: ''}
       erb(:"module/command_list", locals: {layout: Rubysite.get_layout_vars([], sidebar_links, route_string), mod: mod})
@@ -149,86 +151,121 @@ module Rubysite
     base = Kernel.const_get(base.to_sym) if base.class == String
     route_string = "#{route_prefix}/#{command.to_s}"
     docs = Rubycom::Documentation.get_doc(base.public_method(command)) || {}
-    param_defs = Rubycom::Arguments.get_param_definitions(base.public_method(command))
+    param_defs = Rubycom::Arguments.get_param_definitions(base.public_method(command)).map { |key, val|
+      val[:doc] = (docs[:param].nil?) ? [{type: '', name: '', text: ''}] : docs[:param].select { |line|
+        line.split(' ')[1] == key.to_s || line.split(' ')[0] == key.to_s
+      }.map { |line|
+        {
+            type: line.match(/\[\w+\]/).to_s.chomp(']').reverse.chomp('[').reverse,
+            name: line.sub(/\[\w+\]/, '').split(' ').first.to_sym,
+            text: line.sub(/\[\w+\]/, '').sub(key.to_s,'').strip.capitalize
+        }
+      }
+      {key => val}
+    }.reduce(&:merge) || {}
     sidebar_links = [
         {link: route_prefix, name: 'Back', doc: ''}
     ]
 
     Sinatra::Base::get "#{route_string}/?" do
-      method_call_params = params.map { |key, val| (param_defs.keys.include?(key.to_sym) && param_defs[key.to_sym][:type] == :req) ? "#{val}" : "--#{key}=#{val}" }
+      method_call_params = Rubysite.convert_params(param_defs, params)
 
-      if params.nil? || params.empty?
-        #TODO update form template
+      if (param_defs.size > 0) && (params.nil? || params.empty?)
         form = {
-            base: base,
-            params: params,
+            command_name: command.to_s.split('_').map { |word| word.capitalize }.join(' '),
             param_defs: param_defs,
             method_call_params: method_call_params,
-            docs: docs,
-            name: "#{route_string}_form",
+            docs: docs[:desc].join('\n'),
+            name: "#{route_string.gsub('/','_')}_form",
             action: "#{route_string}",
-            method: 'get',
+            method: 'post',
             fields: param_defs.map { |key, val_hsh|
+              param_doc = val_hsh[:doc].first || {}
               {
                   label: key.to_s.split('_').map { |word| word.capitalize }.join(' ')+':',
-                  type: (docs[:param].nil?) ? 'text' : docs[:param].map { |str| {type: str.match(/\[\w+\]/), name: str.gsub(/\[\w+\]/, '').split(' ').first} }.reduce(&:merge),
+                  type: param_doc[:type],
                   name: "#{key.to_s}",
-                  value: (val_hsh[:default] == :nil_rubycom_required_param) ? '' : val_hsh[:default]
+                  doc_name: param_doc[:name],
+                  value: val_hsh[:default],
+                  doc: param_doc[:text]
               }
             }
         }
-        erb(:"method/form", locals: {layout:  Rubysite.get_layout_vars([], sidebar_links, route_string), form: form})
+        erb(:"method/form", locals: {layout: Rubysite.get_layout_vars([], sidebar_links, route_string), form: form})
       else
-        begin
-          rubysite_out = ''
-
-          def rubysite_out.write(data)
-            self << data
-          end
-
-          rubysite_err = ''
-
-          def rubysite_err.write(data)
-            self << data
-          end
-
-          o_stdout, $stdout = $stdout, rubysite_out
-          o_stderr, $stderr = $stderr, rubysite_err
-
-          puts Rubycom.call_method(base, command, method_call_params)
-
-          result = {
-              base: base,
-              params: params,
-              param_defs: param_defs,
-              method_call_params: method_call_params,
-              docs: docs,
-              output: rubysite_out,
-              error: rubysite_err
-          }
+        result = Rubysite.run_command(base, command, method_call_params)
+        if result[:has_error]
+          erb(:"method/error", locals: {layout: Rubysite.get_layout_vars([], sidebar_links, route_string), error: result})
+        else
           erb(:"method/result", locals: {layout: Rubysite.get_layout_vars([], sidebar_links, route_string), result: result})
-
-        rescue Exception => e
-          error = {
-              base: base,
-              params: params,
-              param_defs: param_defs,
-              method_call_params: method_call_params,
-              message: e.message,
-              stack_trace: e.backtrace
-          }
-          erb(:"method/error", locals: {layout:  Rubysite.get_layout_vars([], sidebar_links, route_string), error: error})
-        ensure
-          $stdout = o_stdout
-          $stderr = o_stderr
         end
       end
     end
+
+    Sinatra::Base::post "#{route_string}/?" do
+      method_call_params = Rubysite.convert_params(param_defs, params)
+      result = Rubysite.run_command(base, command, method_call_params)
+      if result[:has_error]
+        erb(:"method/error", locals: {layout: Rubysite.get_layout_vars([], sidebar_links, route_string), error: result})
+      else
+        erb(:"method/result", locals: {layout: Rubysite.get_layout_vars([], sidebar_links, route_string), result: result})
+      end
+    end
+
     {
         link: route_string,
         name: command.to_s,
         doc: (docs[:desc] || []).join("\n"),
         type: :command
+    }
+  end
+
+  def self.run_command(base, command, method_call_params)
+    $stdout.sync=true
+    begin
+      rubysite_out = ''
+
+      def rubysite_out.write(data)
+        self << data
+      end
+
+      rubysite_err = ''
+
+      def rubysite_err.write(data)
+        self << data
+      end
+
+      o_stdout, $stdout = $stdout, rubysite_out
+      o_stderr, $stderr = $stderr, rubysite_err
+
+      puts Rubycom.call_method(base, command, method_call_params)
+
+      {
+          base: base,
+          command: command,
+          method_call_params: method_call_params,
+          output: rubysite_out,
+          error: rubysite_err
+      }
+
+    rescue Exception => e
+      {
+          has_error: true,
+          base: base,
+          command: command,
+          method_call_params: method_call_params,
+          message: e.message,
+          stack_trace: e.backtrace.join("\n")
+      }
+    ensure
+      $stdout = o_stdout
+      $stderr = o_stderr
+    end
+  end
+
+  def self.convert_params(param_defs, params)
+    params.map { |key, val|
+      (param_defs.keys.include?(key.to_sym) && param_defs[key.to_sym][:type] == :req) ? "#{val}" : "--#{key}=#{val}"
     }
   end
 end
