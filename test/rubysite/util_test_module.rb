@@ -13,7 +13,7 @@ module UtilTestModule
   end
 
   def self.test_command_no_docs
-    puts 'command test'
+    puts 'no docs command test'
   end
 
   # A test_command with one arg

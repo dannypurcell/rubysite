@@ -1,8 +1,9 @@
 require 'rubycom'
 require 'sinatra'
-require "sinatra/reloader" if development?
+require "sinatra/reloader"
 require 'json'
 require 'yaml'
+require 'kramdown'
 
 require "#{File.dirname(__FILE__)}/rubysite/html.rb"
 
@@ -31,24 +32,70 @@ module Rubysite
     args = [args] if args.class == String
     base = Kernel.const_get(base.to_sym) if base.class == String
     begin
+      $stdout.sync=true
       raise SiteError, "Invalid base class invocation: #{base}" if base.nil?
-      Sinatra::Base::set :port, '8080'
-      Sinatra::Base::set :port, args[1] if !args[0].nil? && args[0] == '--port'
-      Sinatra::Base::set :port, args[0].split('=').last if !args[0].nil? && args[0].include?('--port=')
-      Sinatra::Base::set :root, Proc.new { File.join(File.expand_path(File.dirname(__FILE__)), 'rubysite') }
-      Sinatra::Base::set :public_folder, Proc.new { File.join(File.expand_path(File.dirname(__FILE__)), 'rubysite', 'public') }
-      Sinatra::Base::set :views, Proc.new { File.join(File.expand_path(File.dirname(__FILE__)), 'rubysite', 'views') }
-      Sinatra::Base::set :app_name, Proc.new {
-        app_name_arg = args.select { |arg| arg.include?("app_name") }.first || "app_name=#{base.to_s}"
-        app_name_arg.split(/\=|\s/).last
-      }
-
+      Rubysite.set_defaults()
+      Rubysite.set_configuration(Rubysite.parse_args(args))
       Rubysite.define_routes(base)
-
+      puts "Starting Server:"
+      $stdout.sync=false
       Sinatra::Base::run!
     rescue SiteError => e
       $stderr.puts e
     end
+  end
+
+  def self.set_defaults()
+    Sinatra::Base::set :port, '8080'
+    Sinatra::Base::set :root, Proc.new { File.join(File.expand_path(File.dirname(__FILE__)), 'rubysite') }
+    Sinatra::Base::set :public_folder, Proc.new { File.join(File.expand_path(File.dirname(__FILE__)), 'rubysite', 'public') }
+    Sinatra::Base::set :views, Proc.new { File.join(File.expand_path(File.dirname(__FILE__)), 'rubysite', 'views') }
+    Sinatra::Base::set :app_name, Proc.new { File.basename($0, ".*").capitalize }
+    Sinatra::Base::set :readme, Proc.new { Dir.glob(File.absolute_path("#{$0}/../**/*readme*")).first }
+    Sinatra::Base::enable :logging
+  end
+
+  def self.set_configuration(parsed_args)
+    parsed_args.each { |key, val|
+      if Sinatra::Base::settings.respond_to?(key)
+        puts <<-END.gsub(/^ {8}/, '')
+        Overwriting: #{key}
+          Previous Value: #{Sinatra::Base::settings.public_method(key).call}
+               New Value: #{val}
+        END
+      else
+        puts "Setting #{key}: #{val}"
+      end
+      Sinatra::Base::set(key, val)
+    }
+    if Sinatra::Base::settings.respond_to?(:conf_file) && File.exist?(Sinatra::Base.settings.conf_file)
+      YAML.load_file(Sinatra::Base.settings.conf_file).each { |key, val|
+        if Sinatra::Base::settings.respond_to?(key)
+          puts <<-END.gsub(/^ {8}/, '')
+          Overwriting: #{key}
+          Previous Value: #{Sinatra::Base::settings.public_method(key).call}
+               New Value: #{val}
+          END
+        else
+          puts "Setting #{key}: #{val}"
+        end
+        Sinatra::Base::set(key, val)
+      }
+    end
+  end
+
+  def self.parse_args(args)
+    args.map { |arg|
+      Rubycom::Arguments.parse_arg(arg)
+    }.reduce({}) { |acc, arg|
+      if arg[:rubycom_non_opt_arg].nil?
+        acc.merge(arg)
+      else
+        acc[:args] = [] if acc[:args].nil?
+        acc[:args] << arg[:rubycom_non_opt_arg]
+        acc
+      end
+    }
   end
 
   def self.get_layout_vars(nav_bar_links=[], side_bar_links=[], route_string='')
@@ -82,17 +129,23 @@ module Rubysite
 
     Sinatra::Base::get "/?" do
       base_route = defined_routes.select { |link| link[:name]==base.to_s }
-      erb(:index, locals: {layout: Rubysite.get_layout_vars(default_routes, base_route)})
+      index = {
+          readme: Rubysite.parse_readme(settings.readme)
+      }
+      return {service: settings.app_name, routes: defined_routes}.to_json if request.accept?('application/json')
+      erb(:index, locals: {layout: Rubysite.get_layout_vars(default_routes, base_route), index: index})
     end
 
-    Sinatra::Base::get "/server" do
+    Sinatra::Base::get "/server/?" do
       server_info = {
           name: "Default Server"
       }
+      return server_info.to_json if request.accept?('application/json')
       erb(:server_info, locals: {layout: Rubysite.get_layout_vars(default_routes), server_info: server_info})
     end
 
-    Sinatra::Base::get "/help" do
+    Sinatra::Base::get "/help/?" do
+      return defined_routes.to_json if request.accept?('application/json')
       erb(:help, locals: {layout: Rubysite.get_layout_vars(default_routes), site_map: defined_routes})
     end
 
@@ -114,27 +167,28 @@ module Rubysite
         doc: Rubycom::Documentation.get_module_doc(base.to_s).strip,
         type: :module
     }
-
+    method_links = []
     defined_routes = ([module_link] << (Rubycom::Commands.get_top_level_commands(base).select { |sym|
       sym != :Rubysite
     }.map { |command_sym|
       if base.included_modules.map { |mod| mod.name.to_sym }.include?(command_sym)
         Rubysite.define_module_route(base.included_modules.select { |mod| mod.name == command_sym.to_s }.first, route_string)
       else
-        Rubysite.define_method_route(base, command_sym, route_string)
+        method_link = Rubysite.define_method_route(base, command_sym, route_string)
+        method_links << method_link
+        method_link
       end
     } || [])).flatten
 
     Sinatra::Base::get "#{route_string}/?" do
       mod = {
           doc: Rubycom::Documentation.get_module_doc(base.to_s.to_sym),
-          command_list: defined_routes.select { |link|
-            link[:link].gsub(route_string, '').split('/').select { |item| !item.empty? }.size == 1
-          }
+          command_list: method_links
       }
       sidebar_links = defined_routes.flatten.select { |item|
         (item[:type] == :module) && (item[:name] != base.to_s)
       } << {link: route_prefix, name: 'Back', doc: ''}
+      return mod.to_json if request.accept?('application/json')
       erb(:"module/command_list", locals: {layout: Rubysite.get_layout_vars([], sidebar_links, route_string), mod: mod})
     end
 
@@ -158,7 +212,7 @@ module Rubysite
         {
             type: line.match(/\[\w+\]/).to_s.chomp(']').reverse.chomp('[').reverse,
             name: line.sub(/\[\w+\]/, '').split(' ').first.to_sym,
-            text: line.sub(/\[\w+\]/, '').sub(key.to_s,'').strip.capitalize
+            text: line.sub(/\[\w+\]/, '').sub(key.to_s, '').strip.capitalize
         }
       }
       {key => val}
@@ -168,43 +222,32 @@ module Rubysite
     ]
 
     Sinatra::Base::get "#{route_string}/?" do
-      method_call_params = Rubysite.convert_params(param_defs, params)
-
-      if (param_defs.size > 0) && (params.nil? || params.empty?)
-        form = {
-            command_name: command.to_s.split('_').map { |word| word.capitalize }.join(' '),
-            param_defs: param_defs,
-            method_call_params: method_call_params,
-            docs: docs[:desc].join('\n'),
-            name: "#{route_string.gsub('/','_')}_form",
-            action: "#{route_string}",
-            method: 'post',
-            fields: param_defs.map { |key, val_hsh|
-              param_doc = val_hsh[:doc].first || {}
-              {
-                  label: key.to_s.split('_').map { |word| word.capitalize }.join(' ')+':',
-                  type: param_doc[:type],
-                  name: "#{key.to_s}",
-                  doc_name: param_doc[:name],
-                  value: val_hsh[:default],
-                  doc: param_doc[:text]
-              }
+      form = {
+          command_name: command.to_s.split('_').map { |word| word.capitalize }.join(' '),
+          docs: (docs[:desc].nil?)? '' : docs[:desc].join('\n'),
+          name: "#{route_string.gsub('/', '_')}_form",
+          action: "#{route_string}",
+          method: 'post',
+          fields: param_defs.map { |key, val_hsh|
+            param_doc = val_hsh[:doc].first || {}
+            {
+                label: key.to_s.split('_').map { |word| word.capitalize }.join(' ')+':',
+                type: param_doc[:type],
+                name: "#{key.to_s}",
+                doc_name: param_doc[:name],
+                value: val_hsh[:default],
+                doc: param_doc[:text]
             }
-        }
-        erb(:"method/form", locals: {layout: Rubysite.get_layout_vars([], sidebar_links, route_string), form: form})
-      else
-        result = Rubysite.run_command(base, command, method_call_params)
-        if result[:has_error]
-          erb(:"method/error", locals: {layout: Rubysite.get_layout_vars([], sidebar_links, route_string), error: result})
-        else
-          erb(:"method/result", locals: {layout: Rubysite.get_layout_vars([], sidebar_links, route_string), result: result})
-        end
-      end
+          }
+      }
+      return form.to_json if request.accept?('application/json')
+      erb(:"method/form", locals: {layout: Rubysite.get_layout_vars([], sidebar_links, route_string), form: form})
     end
 
     Sinatra::Base::post "#{route_string}/?" do
       method_call_params = Rubysite.convert_params(param_defs, params)
       result = Rubysite.run_command(base, command, method_call_params)
+      return result.to_json if request.accept?('application/json')
       if result[:has_error]
         erb(:"method/error", locals: {layout: Rubysite.get_layout_vars([], sidebar_links, route_string), error: result})
       else
@@ -265,7 +308,18 @@ module Rubysite
 
   def self.convert_params(param_defs, params)
     params.map { |key, val|
-      (param_defs.keys.include?(key.to_sym) && param_defs[key.to_sym][:type] == :req) ? "#{val}" : "--#{key}=#{val}"
+      (param_defs.keys.include?(key.to_sym) && param_defs[key.to_sym][:type] == :req) ? "#{val}" : "--#{key}=#{val.to_s.gsub(/\s+/, "")}"
     }
+  end
+
+  def self.parse_readme(readme_path)
+    return '' if readme_path.nil? || readme_path.empty?
+    return "<h6 style='color: #D11B1B'>Readme render failed: #{readme_path} does not exist.</h6>" unless File.exist?(readme_path)
+    case File.extname(readme_path).downcase
+      when '.md'
+        Kramdown::Document.new(File.read(readme_path)).to_html
+      else
+        "<pre>#{File.read(readme_path)}</pre>"
+    end
   end
 end

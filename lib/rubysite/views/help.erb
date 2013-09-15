@@ -1,6 +1,6 @@
 <h4>Site Map</h4>
 <ul style="list-style-type: none;">
   <%= site_map.map{|route|
-    "<li><a href='#{route}'>#{route}</a></li>"
+    "<li><a href='#{route[:link]}'>#{route[:link]}</a></li>"
     }.join("\n") %>
 </ul>
