@@ -1,27 +1,78 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <title><%= layout[:name] %></title>
-  <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1"/>
-  <link rel="stylesheet" type="text/css" media="screen" href="/css/<%= layout[:name] %>.css"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="/twbs/css/bootstrap.css" rel="stylesheet">
+  <style>
+      body {
+          position: relative;
+          padding-top: 40px;
+      }
+  </style>
+  <script src="/jquery/jquery-2.0.3.js"></script>
+  <script src="/twbs/js/bootstrap.js"></script>
+
+  <link rel="shortcut icon" href="/assets/icons/favicon.png">
+  <link href="/rubysite/css/default.css" rel="stylesheet">
+
 </head>
 <body>
-<div class='content_header'>
-  <h1><%= layout[:name] %></h1>
-  <%= (layout[:bread_crumbs].nil?) ? "" : "#{layout[:bread_crumbs].map{|crumb| "<a href='#{crumb}'>#{crumb.split('/').last}</a>"}.join("/")}<br/>" %>
-  <h4><%= layout[:doc] %></h4>
+<div class="navbar navbar-inverse navbar-fixed-top">
+  <div class="navbar-inner">
+    <div class="container-fluid">
+      <a class="brand" href="/"><%= settings.app_name %></a>
+      <ul class="nav">
+        <%= layout[:nav_bar_links].map{|link_item| "<li><a href='#{link_item[:link]}' title='#{link_item[:doc]}'>#{link_item[:name]}</a></li>" }.join("\n") %>
+      </ul>
+    </div>
+  </div>
+</div><!--/navbar-top -->
+
+<div class="wrapper">
+  <div class="sidebar-nav sidebar-nav-fixed inverse">
+    <ul class="nav">
+      <%= layout[:side_bar_links].map{|link_item|
+        if link_item[:header_name].nil?
+          "<li><a href='#{link_item[:link]}' title='#{link_item[:doc]}'>#{link_item[:name]}</a></li>"
+        else
+          "<li><span class='sidebar-nav-header'>#{link_item[:header_name]}</span></li>"
+        end
+      }.join("\n") %>
+    </ul>
+  </div><!--/sidebar -->
+
+  <div class="container-fluid content-area">
+    <div class="row-fluid">
+      <div class="span12">
+        <% if !layout[:breadcrumbs].nil? && !layout[:breadcrumbs].empty? %>
+            <ul class="breadcrumb">
+              <%= layout[:breadcrumbs].map{|crumb|
+                if crumb[:active]
+                  "<li class='active'>#{crumb[:name]}</li>"
+                else
+                  "<li><a href='#{crumb[:link]}'>#{crumb[:name]}</a> <span class='divider'>/</span></li>"
+                end
+              }.join("\n") %>
+            </ul>
+        <% end %>
+        <div class="content">
+          <%= yield %>
+          <br />
+        </div>
+      </div>
+    </div>
+  </div><!--/container-area -->
 </div>
-<div class='navigation_panel'>
-  <ul>
-    <%= layout[:nav_entries].map{|entry|
-        "<li><a href='#{entry[:link]}' title='#{entry[:doc]}'>#{entry[:link_name]}</a></li>"
-       }.join("\n") %>
-  </ul>
-</div>
-<div class='content_body'>
-  <%= yield %>
-</div>
-<div class='content_footer'>
-  Powered by <a href='http://github.com/dannypurcell/rubysite'>Rubysite</a>!
-</div>
+
+<div class="navbar navbar-inverse navbar-fixed-bottom footer">
+  <div class="navbar-inner">
+    <div class="container-fluid">
+      <ul class="nav">
+        <li><a href="https://github.com/dannypurcell/rubysite">Powered by Rubysite!</a></li>
+      </ul>
+    </div>
+  </div>
+</div><!--/footer -->
+
 </body>
 </html>

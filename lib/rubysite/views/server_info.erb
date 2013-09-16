@@ -1,0 +1,6 @@
+<h4>Server Info</h4>
+<ul style="list-style-type: none;">
+  <%= server_info.map{|key, val|
+    "<li><strong>#{key.to_s}:</strong> #{val.to_s}</li>" }.join("\n")
+  %>
+</ul>
