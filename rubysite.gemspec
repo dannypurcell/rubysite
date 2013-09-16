@@ -24,4 +24,5 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'rubycom'
   spec.add_dependency 'sinatra'
   spec.add_dependency 'sinatra-contrib'
+  spec.add_dependency 'kramdown'
 end

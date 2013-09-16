@@ -1,9 +1,7 @@
-<h3>Commands:</h3>
-<br/>
-<ul>
-  <ul>
-    <%= command_list[:command_list].map{|entry|
-      "<li><a href='#{entry[:link]}'>#{entry[:link_name]}</a>#{entry[:doc]}</li>"
-    }.join("\n") %>
-  </ul>
-</ul>
+<p><%= mod[:doc] %></p>
+<h4>Commands:</h4>
+<table>
+  <%= mod[:command_list].map{|entry|
+    "<tr><td><a href='#{entry[:link]}'>#{entry[:name]}</a></td><td>&nbsp&nbsp&nbsp&nbsp#{entry[:doc]}</td></tr>"
+  }.join("\n") %>
+</table>

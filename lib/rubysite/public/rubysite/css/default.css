@@ -1,0 +1,46 @@
+html, body {height: 100%;}
+
+.sidebar-nav-fixed {
+    position: fixed;
+    top: 40px;
+    width: 15%;
+    height: 100%;
+    text-wrap: normal;
+    overflow-wrap: break-word;
+    text-align: center;
+}
+
+.sidebar-nav-header {
+    font-weight: bold;
+    font-size: 110%;
+}
+
+.wrapper{
+    min-height: 100%;
+}
+
+.content-area {
+    overflow:auto;
+    margin-left: 15%;
+}
+
+.footer {
+    position: relative;
+    clear:both;
+}
+
+.inverse {
+    color: #999999;
+    background-color: #1b1b1b;
+    border-color: #252525;
+}
+
+.inverse > ul > li > a {
+    color: #cccccc;
+}
+
+.inverse > ul > li > a:hover {
+    color: #ffffff;
+    background-color: #1b1b1b;
+    border-color: #252525;
+}
