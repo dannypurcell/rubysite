@@ -3,9 +3,6 @@
     <legend><%= form[:command_name] %></legend>
     <p><%= form[:docs] %></p>
     <%= Rubysite::Html.generate_fields(form[:fields]) %>
-    <div class="form-actions">
-      <button type="submit" class="btn btn-primary">Submit</button>
-      <button type="reset" class="btn">Clear</button>
-    </div>
+    <%= Rubysite::Html.gen_form_buttons(!form[:fields].empty?) %>
   </fieldset>
 </form>

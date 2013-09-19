@@ -50,7 +50,7 @@ module Rubysite
     Sinatra::Base::set :root, Proc.new { File.join(File.expand_path(File.dirname(__FILE__)), 'rubysite') }
     Sinatra::Base::set :public_folder, Proc.new { File.join(File.expand_path(File.dirname(__FILE__)), 'rubysite', 'public') }
     Sinatra::Base::set :views, Proc.new { File.join(File.expand_path(File.dirname(__FILE__)), 'rubysite', 'views') }
-    Sinatra::Base::set :app_name, Proc.new { File.basename($0, ".*").capitalize }
+    Sinatra::Base::set :app_name, Proc.new { File.basename($0, ".*").split('_').map(&:capitalize).join }
     Sinatra::Base::set :readme, Proc.new { Dir.glob(File.absolute_path("#{$0}/../**/*readme*")).first }
     Sinatra::Base::enable :logging
   end

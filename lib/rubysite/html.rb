@@ -19,14 +19,14 @@ module Rubysite
       }.join("<br />\n")
     end
 
-    def self.get_html_type(documented_type)
-      type = documented_type.to_s.downcase
-      return 'text' if ['string'].include?(type)
+    def self.get_html_type(original_type)
+      type = original_type.to_s.downcase
+      return 'text' if ['string','symbol'].include?(type)
       return 'textarea' if ['text'].include?(type)
       return 'number' if ['integer', 'fixnum'].include?(type)
       return 'range' if ['range'].include?(type)
       return 'tel' if ['tel', 'telephone', 'phone-number'].include?(type)
-      return 'checkbox' if ['boolean'].include?(type)
+      return 'checkbox' if ['boolean','trueclass','falseclass'].include?(type)
       return 'url' if ['url'].include?(type)
       return 'email' if ['email'].include?(type)
       return 'file' if ['file', 'path'].include?(type)
@@ -38,12 +38,12 @@ module Rubysite
       return 'month' if ['month'].include?(type)
       return 'week' if ['week'].include?(type)
       return 'time' if ['time', 'timestamp'].include?(type)
-      return documented_type
+      return original_type
     end
 
     def self.gen_field(type, name, label, value, help_doc)
-      $stdout.sync = true
-      case type.downcase
+      field_type = (type.nil? || type.empty?) ? self.get_html_type(value.class) : type
+      case field_type.to_s.downcase
         when 'array', 'rest'
           self.gen_dynamic_text(name, label, value, help_doc)
         when 'text'
@@ -59,7 +59,7 @@ module Rubysite
         when 'date'
           self.gen_date(name, label, value, help_doc)
         else
-          self.gen_default(name, label, value, help_doc, type)
+          self.gen_default(name, label, value, help_doc, field_type)
       end
     end
 
@@ -205,6 +205,21 @@ module Rubysite
         </div>
       </div>
       END
+    end
+
+    def self.gen_form_buttons(has_fields)
+      if has_fields
+        <<-END.gsub(/^ {8}/, '')
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Submit</button>
+          <button type="reset" class="btn">Clear</button>
+        </div>
+        END
+      else
+        <<-END.gsub(/^ {8}/, '')
+          <button type="submit" class="btn btn-primary">Execute</button>
+        END
+      end
     end
 
   end

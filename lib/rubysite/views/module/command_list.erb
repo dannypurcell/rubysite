@@ -2,6 +2,6 @@
 <h4>Commands:</h4>
 <table>
   <%= mod[:command_list].map{|entry|
-    "<tr><td><a href='#{entry[:link]}'>#{entry[:name]}</a></td><td>&nbsp&nbsp&nbsp&nbsp#{entry[:doc]}</td></tr>"
+    "<tr><td><a href='#{entry[:link]}'>#{entry[:name].split('_').map(&:capitalize).join(' ')}</a></td><td>&nbsp&nbsp&nbsp&nbsp#{entry[:doc]}</td></tr>"
   }.join("\n") %>
 </table>
