@@ -217,5 +217,4 @@ module UtilTestModule
     raise "Check out this error!"
   end
 
-  include Rubysite
 end

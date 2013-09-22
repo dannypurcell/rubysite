@@ -4,6 +4,4 @@ module UtilTestNoSingleton
   def test_method
     "TEST_NON_SINGLETON_METHOD"
   end
-
-  include Rubysite
 end
