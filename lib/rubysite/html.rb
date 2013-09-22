@@ -21,12 +21,12 @@ module Rubysite
 
     def self.get_html_type(original_type)
       type = original_type.to_s.downcase
-      return 'text' if ['string','symbol'].include?(type)
+      return 'text' if ['string', 'symbol'].include?(type)
       return 'textarea' if ['text'].include?(type)
       return 'number' if ['integer', 'fixnum'].include?(type)
       return 'range' if ['range'].include?(type)
       return 'tel' if ['tel', 'telephone', 'phone-number'].include?(type)
-      return 'checkbox' if ['boolean','trueclass','falseclass'].include?(type)
+      return 'checkbox' if ['boolean', 'trueclass', 'falseclass'].include?(type)
       return 'url' if ['url'].include?(type)
       return 'email' if ['email'].include?(type)
       return 'file' if ['file', 'path'].include?(type)
@@ -220,6 +220,15 @@ module Rubysite
           <button type="submit" class="btn btn-primary">Execute</button>
         END
       end
+    end
+
+    def self.gen_link_buttons(links)
+      return unless links.respond_to?(:each)
+      links.map { |link|
+        <<-END.gsub(/^ {8}/, '')
+          <a href="#{link[:link]}" class="btn btn-primary">#{link[:name]}</a>
+        END
+      }.join("\n")
     end
 
   end

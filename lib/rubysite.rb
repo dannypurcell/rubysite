@@ -1,9 +1,10 @@
 require 'rubycom'
 require 'sinatra'
-require "sinatra/reloader"
+require "sinatra/config_file"
 require 'json'
 require 'yaml'
 require 'kramdown'
+require 'fileutils'
 
 require "#{File.dirname(__FILE__)}/rubysite/html.rb"
 
@@ -32,56 +33,44 @@ module Rubysite
     args = [args] if args.class == String
     base = Kernel.const_get(base.to_sym) if base.class == String
     begin
-      $stdout.sync=true
       raise SiteError, "Invalid base class invocation: #{base}" if base.nil?
-      Rubysite.set_defaults()
       Rubysite.set_configuration(Rubysite.parse_args(args))
       Rubysite.define_routes(base)
-      puts "Starting Server:"
-      $stdout.sync=false
       Sinatra::Base::run!
     rescue SiteError => e
       $stderr.puts e
     end
   end
 
-  def self.set_defaults()
-    Sinatra::Base::set :port, '8080'
-    Sinatra::Base::set :root, Proc.new { File.join(File.expand_path(File.dirname(__FILE__)), 'rubysite') }
-    Sinatra::Base::set :public_folder, Proc.new { File.join(File.expand_path(File.dirname(__FILE__)), 'rubysite', 'public') }
-    Sinatra::Base::set :views, Proc.new { File.join(File.expand_path(File.dirname(__FILE__)), 'rubysite', 'views') }
-    Sinatra::Base::set :app_name, Proc.new { File.basename($0, ".*").split('_').map(&:capitalize).join }
-    Sinatra::Base::set :readme, Proc.new { Dir.glob(File.absolute_path("#{$0}/../**/*readme*")).first }
-    Sinatra::Base::enable :logging
-  end
-
   def self.set_configuration(parsed_args)
-    parsed_args.each { |key, val|
-      if Sinatra::Base::settings.respond_to?(key)
-        puts <<-END.gsub(/^ {8}/, '')
-        Overwriting: #{key}
-          Previous Value: #{Sinatra::Base::settings.public_method(key).call}
-               New Value: #{val}
-        END
-      else
-        puts "Setting #{key}: #{val}"
-      end
+    conf = {
+        port: '8080',
+        root: File.join(File.expand_path(File.dirname(__FILE__)), 'rubysite'),
+        public_folder: File.join(File.expand_path(File.dirname(__FILE__)), 'rubysite', 'public'),
+        views: File.join(File.expand_path(File.dirname(__FILE__)), 'rubysite', 'views'),
+        app_name: File.basename($0, ".*").split('_').map(&:capitalize).join,
+        readme: Dir.glob(File.absolute_path("#{$0}/../**/*readme*")).first,
+        logging: true,
+        log_ext: '.log',
+        log_commands: true,
+        logs_to_keep: 0,
+        log_dir: "#{File.dirname(File.absolute_path($0))}/#{File.basename($0, ".*").split('_').map(&:capitalize).join}_logs"
+    }
+    .merge(parsed_args)
+    .merge(
+        if File.exists?(parsed_args[:config_file] || '')
+          YAML.load_file(parsed_args[:config_file]).map { |k, v| {k.to_s.to_sym => v} }.reduce(&:merge).select { |_, v| !v.nil? }
+        else
+          {}
+        end
+    ).each { |key, val|
       Sinatra::Base::set(key, val)
     }
-    if Sinatra::Base::settings.respond_to?(:conf_file) && File.exist?(Sinatra::Base.settings.conf_file)
-      YAML.load_file(Sinatra::Base.settings.conf_file).each { |key, val|
-        if Sinatra::Base::settings.respond_to?(key)
-          puts <<-END.gsub(/^ {8}/, '')
-          Overwriting: #{key}
-          Previous Value: #{Sinatra::Base::settings.public_method(key).call}
-               New Value: #{val}
-          END
-        else
-          puts "Setting #{key}: #{val}"
-        end
-        Sinatra::Base::set(key, val)
-      }
-    end
+
+    File.open("#{File.dirname(File.absolute_path($0))}/#{Sinatra::Base::settings.app_name}_config.yaml", 'w+') { |f|
+      f.write(conf.select { |key, _| ![:write_config_file, :config_file].include?(key) }.to_yaml)
+    } if conf[:write_config_file] && conf.length > 0
+
   end
 
   def self.parse_args(args)
@@ -130,7 +119,7 @@ module Rubysite
     Sinatra::Base::get "/?" do
       base_route = defined_routes.select { |link| link[:name]==base.to_s }
       index = {
-          readme: Rubysite.parse_readme(settings.readme)
+          readme: (settings.readme) ? Rubysite.parse_readme(settings.readme) : ''
       }
       return {service: settings.app_name, routes: defined_routes}.to_json if request.accept?('application/json')
       erb(:index, locals: {layout: Rubysite.get_layout_vars(default_routes, base_route), index: index})
@@ -218,13 +207,14 @@ module Rubysite
       {key => val}
     }.reduce(&:merge) || {}
     sidebar_links = [
+        {link: "#{route_string}/runs", name: 'Runs', doc: ''},
         {link: route_prefix, name: 'Back', doc: ''}
     ]
 
     Sinatra::Base::get "#{route_string}/?" do
       form = {
           command_name: command.to_s.split('_').map { |word| word.capitalize }.join(' '),
-          docs: (docs[:desc].nil?)? '' : docs[:desc].join('\n'),
+          docs: (docs[:desc].nil?) ? '' : docs[:desc].join('\n'),
           name: "#{route_string.gsub('/', '_')}_form",
           action: "#{route_string}",
           method: 'post',
@@ -244,9 +234,51 @@ module Rubysite
       erb(:"method/form", locals: {layout: Rubysite.get_layout_vars([], sidebar_links, route_string), form: form})
     end
 
+    runs_sb_links = [
+        {link: route_string, name: 'Back', doc: ''}
+    ]
+
+    Sinatra::Base::get "#{route_string}/runs/?" do
+      log_ext = settings.log_ext
+      run_list = {
+          doc: '',
+          links: Dir["#{settings.log_dir}#{route_string}/*"].select { |file|
+            File.extname(file) == log_ext
+          }.map { |file|
+            parts = File.basename(file).chomp(log_ext).split('_')
+            time_parts = parts.last.split('-')
+            timestamp = Time.parse("#{parts.first} #{time_parts[0..-2].join(':')}.#{time_parts.last}")
+            {link: "#{route_string}/runs/#{File.basename(file).chomp(log_ext)}", name: timestamp, doc: ''}
+          }
+      }
+      return run_list.to_json if request.accept?('application/json')
+      erb(:"method/run_list", locals: {layout: Rubysite.get_layout_vars([], runs_sb_links, "#{route_string}/runs"), run_list: run_list})
+    end
+
+    run_sb_links = [
+        {link: "#{route_string}/runs", name: 'Back', doc: ''}
+    ]
+
+    Sinatra::Base::get "#{route_string}/runs/:id/?" do
+      run_log = "#{settings.log_dir}#{route_string}/#{params[:id]}#{settings.log_ext}"
+      result = (File.exists?(run_log)) ? YAML.load_file(run_log) : {has_error: true, message: "No saved run for id: #{run_id}"}
+      return result.to_json if request.accept?('application/json')
+
+      if result[:has_error]
+        erb(:"method/error", locals: {layout: Rubysite.get_layout_vars([], run_sb_links, "#{route_string}/runs/#{params[:id]}"), error: result})
+      else
+        erb(:"method/result", locals: {layout: Rubysite.get_layout_vars([], run_sb_links, "#{route_string}/runs/#{params[:id]}"), result: result})
+      end
+    end
+
     Sinatra::Base::post "#{route_string}/?" do
       method_call_params = Rubysite.convert_params(param_defs, params)
       result = Rubysite.run_command(base, command, method_call_params)
+      Rubysite.log_command(settings.log_dir,
+                           settings.log_ext,
+                           settings.logs_to_keep,
+                           route_string,
+                           result) if Sinatra::Base.settings.log_commands
       return result.to_json if request.accept?('application/json')
       if result[:has_error]
         erb(:"method/error", locals: {layout: Rubysite.get_layout_vars([], sidebar_links, route_string), error: result})
@@ -304,6 +336,32 @@ module Rubysite
       $stdout = o_stdout
       $stderr = o_stderr
     end
+  end
+
+  def self.log_command(log_dir, log_ext, logs_to_keep, route_string, result)
+    begin
+      FileUtils.mkdir_p("#{log_dir}#{route_string}")
+      File.open("#{log_dir}#{route_string}/#{Time.now.strftime("%Y-%m-%d_%H-%M-%S-%L")}#{log_ext}", 'a+') { |f|
+        f.write(result.to_yaml)
+      }
+    rescue Exception => e
+      $stderr.sync = true
+      $stderr.puts e
+      $stderr.sync = false
+    end unless logs_to_keep <= 0
+    Rubysite.clean_log_dir("#{log_dir}#{route_string}", logs_to_keep, /\d+-\d+-\d+_\d+-\d+-\d+-\d+\.\w+/)
+  end
+
+  def self.clean_log_dir(log_dir, logs_to_keep, matcher)
+    logs = Dir["#{log_dir}/*"]
+    logs.select { |file| file.match(matcher).nil? }.each { |log_file|
+      File.delete(log_file)
+    }
+    logs.select { |file| !file.match(matcher).nil? }.sort_by { |f| File.mtime(f) }.reverse.last(logs.length-logs_to_keep).each { |log_file|
+      File.delete(log_file)
+    } if logs.length > logs_to_keep
+    Dir.rmdir(log_dir) if Dir.exists?(log_dir) && (Dir.entries(log_dir) - %w[ . .. ]).empty?
+    FileUtils.remove_dir(Sinatra::Base.settings.log_dir) if Dir["#{Sinatra::Base.settings.log_dir}/**/*"].map{|f| Dir["#{f}/*"].select{|file| !File.directory?(file)}.empty?}.reduce(&:&)
   end
 
   def self.convert_params(param_defs, params)

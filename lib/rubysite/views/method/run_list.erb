@@ -1,0 +1,5 @@
+<p><%= run_list[:doc] %></p>
+<h4>Saved Runs:</h4>
+<ol>
+  <%= run_list[:links].map{|run| "<li><a href='#{run[:link]}'>#{run[:name].strftime("%b %e, %Y %l:%M:%S:%L %p")}</a></li>" }.reverse.join("\n") %>
+</ol>
