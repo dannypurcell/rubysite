@@ -31,7 +31,7 @@ module Rubysite
           log_commands: true,
           logs_to_keep: 0,
           log_dir: "#{app_base_route}/#{app_name}_logs",
-          conf_output_file: "#{app_base_route}/#{app_name}_config.yaml"
+          conf_output_file: "#{app_base_route}/#{app_name}_config.yaml",
       }
     end
 

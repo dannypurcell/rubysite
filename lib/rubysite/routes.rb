@@ -7,9 +7,46 @@ require 'rubycom'
 require 'sinatra'
 require 'yaml'
 
-
 module Rubysite
   module Routes
+    # Recursively defines routes for the web service according to the commands included in the given base Module.
+    # Starts at '/'. Additionally defines any default routes required by the web service.
+    #
+    # @param [Module] base the Module for which a web interface should be generated
+    # @return [Array] a String array listing the routes which were defined for the given base Module
+    def self.define_routes(base)
+      base = Kernel.const_get(base.to_sym) if base.class == String
+      default_routes = [
+          {link: "/server", name: "Server Info", doc: "Information about the server this console is running on."},
+          {link: "/help", name: "Help", doc: "Interface documentation"}
+      ]
+      defined_routes = (Rubysite::Routes.define_module_route(base) + default_routes)||[]
+
+      Sinatra::Base::get "/?" do
+        base_route = defined_routes.select { |link| link[:name]==base.to_s }
+        index = {
+            readme: (settings.readme) ? Rubysite::Helpers.parse_readme(settings.readme) : ''
+        }
+        return {service: settings.app_name, routes: defined_routes}.to_json if request.accept?('application/json')
+        erb(:index, locals: {layout: Rubysite::Helpers.get_layout_vars(default_routes, base_route), index: index})
+      end
+
+      Sinatra::Base::get "/server/?" do
+        server_info = {
+            name: "Default Server"
+        }
+        return server_info.to_json if request.accept?('application/json')
+        erb(:server_info, locals: {layout: Rubysite::Helpers.get_layout_vars(default_routes), server_info: server_info})
+      end
+
+      Sinatra::Base::get "/help/?" do
+        return defined_routes.to_json if request.accept?('application/json')
+        erb(:help, locals: {layout: Rubysite::Helpers.get_layout_vars(default_routes), site_map: defined_routes})
+      end
+
+      defined_routes
+    end
+
     # Defines the route for the given command on the given base. The resulting route will be prefixed with the given route_prefix.
     #
     # @param [Module] base the Module which contains the specified command Method
@@ -109,8 +146,24 @@ module Rubysite
         if result[:has_error]
           erb(:"method/error", locals: {layout: Rubysite::Helpers.get_layout_vars([], sidebar_links, route_string), error: result})
         else
+          result[:stream_id] = SecureRandom.uuid
           erb(:"method/result", locals: {layout: Rubysite::Helpers.get_layout_vars([], sidebar_links, route_string), result: result})
         end
+      end
+
+      Sinatra::Base::get "#{route_string}/stream/:id/?", :provides => 'text/event-stream' do
+        Sinatra::Base.set(:connections, {}) unless settings.respond_to?(:connections)
+        stream(:keep_open){|out|
+          settings.connections[params[:id]] = out
+          out.callback { settings.connections.delete(out) }
+          out.errback { settings.connections.delete(out) }
+        }
+      end
+
+      Sinatra::Base::post "#{route_string}/stream/:id/?" do
+        Sinatra::Base.set(:connections, {}) unless settings.respond_to?(:connections)
+        settings.connections[params[:id]] << params[:stdin].split("\n").map{|line| "data: #{line}\n\n" }.join
+        ''
       end
 
       {
@@ -159,44 +212,6 @@ module Rubysite
         } << {link: route_prefix, name: 'Back', doc: ''}
         return mod.to_json if request.accept?('application/json')
         erb(:"module/command_list", locals: {layout: Rubysite::Helpers.get_layout_vars([], sidebar_links, route_string), mod: mod})
-      end
-
-      defined_routes
-    end
-
-    # Recursively defines routes for the web service according to the commands included in the given base Module.
-    # Starts at '/'. Additionally defines any default routes required by the web service.
-    #
-    # @param [Module] base the Module for which a web interface should be generated
-    # @return [Array] a String array listing the routes which were defined for the given base Module
-    def self.define_routes(base)
-      base = Kernel.const_get(base.to_sym) if base.class == String
-      default_routes = [
-          {link: "/server", name: "Server Info", doc: "Information about the server this console is running on."},
-          {link: "/help", name: "Help", doc: "Interface documentation"}
-      ]
-      defined_routes = (Rubysite::Routes.define_module_route(base) + default_routes)||[]
-
-      Sinatra::Base::get "/?" do
-        base_route = defined_routes.select { |link| link[:name]==base.to_s }
-        index = {
-            readme: (settings.readme) ? Rubysite::Helpers.parse_readme(settings.readme) : ''
-        }
-        return {service: settings.app_name, routes: defined_routes}.to_json if request.accept?('application/json')
-        erb(:index, locals: {layout: Rubysite::Helpers.get_layout_vars(default_routes, base_route), index: index})
-      end
-
-      Sinatra::Base::get "/server/?" do
-        server_info = {
-            name: "Default Server"
-        }
-        return server_info.to_json if request.accept?('application/json')
-        erb(:server_info, locals: {layout: Rubysite::Helpers.get_layout_vars(default_routes), server_info: server_info})
-      end
-
-      Sinatra::Base::get "/help/?" do
-        return defined_routes.to_json if request.accept?('application/json')
-        erb(:help, locals: {layout: Rubysite::Helpers.get_layout_vars(default_routes), site_map: defined_routes})
       end
 
       defined_routes

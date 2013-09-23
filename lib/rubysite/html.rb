@@ -147,12 +147,12 @@ module Rubysite
     end
 
     def self.gen_textarea(name, label, value, help_doc)
-      placeholder = self.get_placeholder(value)
+      placeholder = self.get_placeholder(value.gsub("\n",''))
       <<-END.gsub(/^ {6}/, '')
       <div class='control-group'>
         <label class='control-label' for='#{name}'>#{label}</label>
         <div class='input controls'>
-          <textarea id='#{name}' name='#{name}' class='xxlarge span4' rows="6" #{placeholder if placeholder == 'required' }>#{placeholder unless placeholder == 'required' }</textarea>
+          <textarea id='#{name}' name='#{name}' class='xxlarge span4' rows="6" #{'required' if placeholder == 'required' }>#{value unless placeholder == 'required' }</textarea>
           <p class='help-block'>#{help_doc}</p>
         </div>
       </div>
