@@ -17,7 +17,6 @@ module Rubysite
   #
   # @param [Module] base the module which invoked 'include Rubysite'
   def self.included(base)
-    return if base.include?(Rubycom)
     base_file_path = caller.first.gsub(/:\d+:.+/, '')
     if base.class == Module && (base_file_path == $0 || Rubycom.is_executed_by_gem?(base_file_path))
       base.module_eval {
