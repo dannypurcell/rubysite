@@ -8,8 +8,8 @@ Gem::Specification.new do |spec|
   spec.version       = Rubysite::VERSION
   spec.authors       = ["Danny Purcell"]
   spec.email         = ["d.purcell.jr+rubysite@gmail.com"]
-  spec.description   = %q{Provides web access for singleton methods in an including module. Allows the user to make a web service by simply including Rubysite.}
-  spec.summary       = %q{Converts singleton methods to web service routes upon inclusion.}
+  spec.description   = %q{Provides web access for methods in an including module. Turn a library into a web service by simply including Rubysite.}
+  spec.summary       = %q{Turn a library into a web service by simply including Rubysite.}
   spec.homepage      = "http://github.com/dannypurcell/Rubysite"
   spec.license       = "MIT"
 

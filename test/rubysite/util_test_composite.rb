@@ -17,5 +17,16 @@ module UtilTestComposite
     test_arg
   end
 
+  # A test_command in which produces output over time
+  #
+  # @param [String] test_arg a test argument
+  # @return [String] the test arg
+  def self.test_streaming_command(test_arg, run_time)
+    run_time.times{|i|
+      puts "#{test_arg} #{i}"
+      sleep 1
+    }
+  end
+
   include Rubysite
 end
