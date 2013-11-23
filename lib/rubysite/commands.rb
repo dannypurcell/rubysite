@@ -5,46 +5,46 @@ require 'sinatra'
 module Rubysite
   module Commands
     def self.run_command(base, command, method_call_params)
-      $stdout.sync=true
-      begin
-        rubysite_out = ''
+      proc_in = $stdin
+      proc_out = $stdout
+      proc_err = $stderr
+      fork do
+        o_stdin, $stdin = $stdin, proc_in
+        o_stdout, $stdout = $stdout, proc_out
+        o_stderr, $stderr = $stderr, proc_err
+        $stdout.sync=true
+        $stderr.sync=true
+        begin
 
-        def rubysite_out.write(data)
-          self << data
+
+          puts Rubycom.call_method(base, command, method_call_params)
+
+          {
+              base: base,
+              command: command,
+              method_call_params: method_call_params,
+              output: rubysite_out,
+              error: rubysite_err
+          }
+
+        rescue Exception => e
+          {
+              has_error: true,
+              base: base,
+              command: command,
+              method_call_params: method_call_params,
+              message: e.message,
+              stack_trace: e.backtrace.join("\n")
+          }
+        ensure
+          $stdin = o_stdin
+          $stdout = o_stdout
+          $stderr = o_stderr
         end
-
-        rubysite_err = ''
-
-        def rubysite_err.write(data)
-          self << data
-        end
-
-        o_stdout, $stdout = $stdout, rubysite_out
-        o_stderr, $stderr = $stderr, rubysite_err
-
-        puts Rubycom.call_method(base, command, method_call_params)
-
-        {
-            base: base,
-            command: command,
-            method_call_params: method_call_params,
-            output: rubysite_out,
-            error: rubysite_err
-        }
-
-      rescue Exception => e
-        {
-            has_error: true,
-            base: base,
-            command: command,
-            method_call_params: method_call_params,
-            message: e.message,
-            stack_trace: e.backtrace.join("\n")
-        }
-      ensure
-        $stdout = o_stdout
-        $stderr = o_stderr
       end
+      proc_in
+      proc_out
+      proc_err
     end
 
     def self.clean_log_dir(log_dir, logs_to_keep, matcher)

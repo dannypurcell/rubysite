@@ -1,9 +1,45 @@
+<form  id="stdin_form" name="stdin_form" onsubmit="sp(); return false;" action="" method="post" class='form-horizontal'>
+  <fieldset form="stdin_form" onsubmit="sp(); return false;">
+    <legend>StdIn</legend>
+    <p>Input to be sent to the standard input channel</p>
+    <%= Rubysite::Html.gen_text('stdin','StdIn','','Input to be sent to the standard input channel.') %>
+    <div class="form-actions">
+      <button type="button" class="btn btn-primary" onclick="sp()">Submit</button>
+      <button type="reset" class="btn">Clear</button>
+    </div>
+  </fieldset>
+</form>
+
+<%= Rubysite::Html.gen_textarea('stdout','StdOut',result[:output],'Input from the standard output channel.') %>
+<%= Rubysite::Html.gen_textarea('stderr','StdOut',result[:output],'Input from the standard error channel.') %>
 <div class='result_stdout'>
-  <!-- TODO nicer results -->
   <h3>StdOut</h3>
-  <p style='white-space: pre-wrap;'><%= result[:output] %></p>
+  <p id="stdout" style='white-space: pre-wrap;'><%= result[:output] %></p>
 </div>
 <div class='result_stderr'>
   <h3>StdErr</h3>
-  <p style='white-space: pre-wrap;'><%= result[:error] %></p>
+  <p id="stderr" style='white-space: pre-wrap;'><%= result[:error] %></p>
 </div>
+
+
+<script>
+    // reading
+    if (!!window.EventSource){
+        var eventSource = new EventSource(document.URL+'/stream/<%= result[:stream_id] %>');
+        eventSource.addEventListener('message', function(e) {
+            $('#stdout')[0].value += e.data + "\n";
+        });
+    }else{
+        console.error("EventSource not available, can not stream output.");
+    }
+
+    // writing
+    function sp(e) {
+        var stdin = $('#stdin');
+        $.post(document.URL+'/stream/<%= result[:stream_id] %>', {stdin: stdin.val()});
+        stdin.val('');
+        stdin.focus();
+        return false;
+    };
+
+</script>
